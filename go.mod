@@ -13,6 +13,7 @@ replace (
 
 require (
 	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
+	github.com/aws/aws-sdk-go v1.23.2
 	github.com/coreos/ignition v0.33.0
 	github.com/go-logr/zapr v0.1.0
 	github.com/google/pprof v0.0.0-20190908185732-236ed259b199 // indirect
