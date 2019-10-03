@@ -273,7 +273,59 @@ func (a *awsProvider) findOrCreateSg(infraID string, vpc *ec2.Vpc) (string, erro
 	if err != nil {
 		return a.createWindowsWorkerSg(infraID, vpc)
 	}
+
+	// Using existing security group, additional check to winrm port
+	a.verifyOrCreateWinrmPort(sgID)
 	return sgID, nil
+}
+
+// Find the winrm port 5986 for the security group. If the port does not exist in the security group
+// notify the user and add the port for the security group.
+func (a *awsProvider) verifyOrCreateWinrmPort(sgId string) error {
+	// Get security group information
+	SgResult, err := a.EC2.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
+		GroupIds: []*string{
+			aws.String(sgId),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// Verify winrm port and protocol are in the inbound rule of the security group
+	portOpenResult := false
+	for _, rule := range SgResult.SecurityGroups[0].IpPermissions {
+		if rule.FromPort != nil && *rule.FromPort == WINRM_PORT {
+			portOpenResult = true
+		}
+	}
+
+	if portOpenResult == false {
+		log.V(0).Info(fmt.Sprintf("The new instance using Security Group %s, whose winrm port is not open.", sgId))
+		log.V(0).Info(fmt.Sprintf("Adding winrm port to Security Group %s", sgId))
+		myIP, err := getMyIp()
+		if err != nil {
+			return err
+		}
+
+		_, err = a.EC2.AuthorizeSecurityGroupIngress(&ec2.AuthorizeSecurityGroupIngressInput{
+			GroupId: aws.String(sgId),
+			IpPermissions: []*ec2.IpPermission{
+				(&ec2.IpPersgIdmission{}).
+					SetIpProtocol("tcp").
+					SetFromPort(WINRM_PORT).
+					SetToPort(WINRM_PORT).
+					SetIpRanges([]*ec2.IpRange{
+						(&ec2.IpRange{}).
+							SetCidrIp(myIP + "/32"),
+				}),
+			},
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // findWindowsWorkerSg creates the Windows worker security group with name <infraID>-windows-worker-sg.
